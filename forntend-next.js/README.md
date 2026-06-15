@@ -97,7 +97,7 @@ sudo mkdir -p /home/ubuntu/frontend
 sudo chown -R $USER:$USER /home/ubuntu/frontend
 cd /home/ubuntu/frontend
 ```
-![alt text](image.png)
+![alt text](imagejjjj.png)
 <!-- SCREENSHOT_PLACEHOLDER: GitHub Deploy Keys interface or terminal displaying SSH public key -->
 <!-- Please paste your screenshot of adding SSH deploy key to GitHub below: -->
 <!-- <img src="./screenshots/github_deploy_key.png" alt="GitHub Deploy Keys" width="700"/> -->
@@ -151,7 +151,7 @@ sudo npm install pm2 -g
 Navigate to your project directory (if not already there) and install the necessary node modules:
 ```bash
 # Make sure you are in the project folder
-cd /home/ubuntu/frontend
+cd /home/ubuntu/frontend/projectname
 
 # Install dependencies
 npm install
@@ -192,16 +192,6 @@ pm2 status
 <!-- Please paste your screenshot showing pm2 status and list below: -->
 <!-- <img src="./screenshots/pm2_status.png" alt="PM2 Status List" width="700"/> -->
 
-### 6.6 Connect to PMX (PM2 Plus) for Monitoring (Optional)
-If you want a graphical web interface to monitor your application:
-1. Go to [PM2 Plus Dashboard](https://pm2.io/) and create an account.
-2. Click on **Create Bucket**.
-3. Run the generated `pm2 link` command on your server:
-   ```bash
-   pm2 link <secret_key> <public_key>
-   ```
-
----
 
 ## 7. Domain Setup & Reverse Proxy (CloudPanel vs Manual Nginx)
 

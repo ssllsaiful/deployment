@@ -72,19 +72,15 @@ CREATE DATABASE my_django_db;
 -- 2. Create database user with a secure password
 CREATE USER django_db_user WITH PASSWORD 'SuperSecurePassword123';
 
--- 3. Set standard optimized configurations for Django
-ALTER ROLE django_db_user SET client_encoding TO 'utf8';
-ALTER ROLE django_db_user SET default_transaction_isolation TO 'read committed';
-ALTER ROLE django_db_user SET timezone TO 'UTC';
 
--- 4. Grant privileges to user on the database
+-- 3. Grant privileges to user on the database
 GRANT ALL PRIVILEGES ON DATABASE my_django_db TO django_db_user;
 
 -- For PostgreSQL 15+, you may also need to grant schema permissions:
 \c my_django_db
 GRANT ALL ON SCHEMA public TO django_db_user;
 
--- 5. Exit PostgreSQL prompt
+-- 4. Exit PostgreSQL prompt
 \q
 ```
 
