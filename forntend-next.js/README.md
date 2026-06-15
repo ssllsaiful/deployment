@@ -327,3 +327,76 @@ sudo certbot renew --dry-run
 <!-- Please paste your screenshot of your live website running securely below: -->
 <!-- <img src="./screenshots/ssl_verification.png" alt="SSL Verification" width="700"/> -->
 
+---
+
+## 9. Automate Deployment with GitHub Actions
+
+To set up continuous deployment (CD), you can use GitHub Actions to automatically deploy code updates to the server whenever you push changes to the `main` branch.
+
+### 9.1 Set Up Secrets on GitHub
+1. Go to your repository on GitHub.
+2. Navigate to **Settings** -> **Secrets and variables** -> **Actions**.
+3. Add the following repository secrets by clicking **New repository secret**:
+   * `SSH_HOST`: Your server IP address (e.g. `203.0.113.5`).
+   * `SSH_USER`: The SSH username (e.g. `ubuntu`).
+   * `SSH_KEY`: The server's SSH Private Key (contents of your `.pem` key file). Make sure it includes the `BEGIN` and `END` lines.
+
+### 9.2 Create the Workflow Configuration
+On your local computer, create a new directory and configuration file at `.github/workflows/deploy.yml` in the root of your project:
+
+```bash
+mkdir -p .github/workflows
+nano .github/workflows/deploy.yml
+```
+
+Paste the following YAML configuration inside the file:
+```yaml
+name: Deploy Next.js Frontend
+
+on:
+  push:
+    branches:
+      - main  # Trigger workflow when pushing to main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Ubuntu Server via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Navigate to project directory
+            cd /home/ubuntu/frontend/projectname
+
+            # Pull latest changes from the repository
+            git pull origin main
+
+            # Install dependencies
+            npm install
+
+            # Build production Next.js files
+            npm run build
+
+            # Restart the application with PM2 using config
+            pm2 restart ecosystem.config.js
+```
+*(Note: Replace `projectname` with your actual project directory name).*
+
+### 9.3 Commit and Push
+Commit the new workflow file and push it:
+```bash
+git add .github/workflows/deploy.yml
+git commit -m "Add GitHub Actions CD deployment workflow"
+git push origin main
+```
+Your frontend application is now fully automated! Whenever you push code, GitHub Actions will trigger, connect to the server, build, and restart PM2 automatically.
+
+

@@ -309,10 +309,6 @@ pm2 start ecosystem.config.js
 ### 7.3 Save PM2 Process List and Verify Status
 To ensure that PM2 restarts your backend automatically when the Ubuntu server restarts:
 ```bash
-# Generate startup configuration
-pm2 startup systemd
-# (Note: Copy and run the command printed by the command output starting with 'sudo env PATH=...')
-
 # Save the current list of running PM2 applications
 pm2 save
 
@@ -368,18 +364,19 @@ sudo nano /etc/nginx/sites-available/api.example.com
 ```
 
 Paste the configuration below (replace `api.example.com` with your actual domain):
+
 ```nginx
 server {
     listen 80;
     server_name api.example.com;
 
-    # Serve favicon, if it exists
-    location = /favicon.ico { access_log off; log_not_found off; }
 
     # Django Media Uploads (if applicable)
     location /media/ {
         alias /home/ubuntu/backend/project_repo_name/media/;
     }
+
+    max_body_size 10M;
 
     location / {
         proxy_pass http://localhost:8000;
@@ -447,3 +444,84 @@ sudo certbot renew --dry-run
 <!-- SCREENSHOT_PLACEHOLDER: Web browser URL bar showing the secure padlock icon on your domain next to your site URL -->
 <!-- Please paste your screenshot of your live website running securely below: -->
 <!-- <img src="./screenshots/ssl_backend_verification.png" alt="SSL Verification" width="700"/> -->
+
+---
+
+## 10. Automate Deployment with GitHub Actions
+
+To automate your backend deployment, you can set up a GitHub Actions workflow to pull the latest code, run database migrations, collect static files, and restart the backend service.
+
+### 10.1 Set Up Secrets on GitHub
+1. Go to your backend repository on GitHub.
+2. Navigate to **Settings** -> **Secrets and variables** -> **Actions**.
+3. Add the following repository secrets by clicking **New repository secret**:
+   * `SSH_HOST`: Your backend server IP address (e.g. `203.0.113.10`).
+   * `SSH_USER`: The SSH username (e.g. `ubuntu`).
+   * `SSH_KEY`: The server's SSH Private Key (contents of your `.pem` key file). Make sure it includes the `BEGIN` and `END` lines.
+
+### 10.2 Create the Workflow Configuration
+On your local computer, create a new directory and configuration file at `.github/workflows/deploy.yml` in the root of your backend project:
+
+```bash
+mkdir -p .github/workflows
+nano .github/workflows/deploy.yml
+```
+
+Paste the following YAML configuration inside the file:
+```yaml
+name: Deploy Django Backend
+
+on:
+  push:
+    branches:
+      - main  # Trigger workflow when pushing to main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Ubuntu Server via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Navigate to project folder on server
+            cd /home/ubuntu/backend/project_repo_name
+
+            # Pull latest changes from the repository
+            git pull origin main
+
+            # Activate Python Virtual Environment
+            source venv/bin/activate
+
+            # Upgrade pip and install dependencies
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            # Run Django migrations (if any are available)
+            python manage.py makemigrations
+            python manage.py migrate
+
+            # Collect static files (like admin CSS/JS assets)
+            python manage.py collectstatic --no-input
+
+            # Restart the backend application using PM2 config
+            pm2 restart ecosystem.config.js
+```
+*(Note: Replace `project_repo_name` with your actual project directory name).*
+
+### 10.3 Commit and Push
+Commit the new workflow file and push it:
+```bash
+git add .github/workflows/deploy.yml
+git commit -m "Add GitHub Actions CD deployment workflow"
+git push origin main
+```
+Your backend application is now fully automated! Whenever you push code, GitHub Actions will trigger, connect to the server, install new packages, run database migrations, update static files, and restart the backend PM2 process automatically.
+
