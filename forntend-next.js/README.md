@@ -168,9 +168,26 @@ npm run build
 <!-- <img src="./screenshots/npm_build.png" alt="NextJS Build Output" width="700"/> -->
 
 ### 6.4 Start Next.js with PM2
-Start the Next.js production server using PM2. This runs the app in the background on port `3000` by default.
+Create an `ecosystem.config.js` file in your project directory:
 ```bash
-pm2 start npm --name "frontend" -- start
+nano ecosystem.config.js
+```
+
+Paste the configuration below:
+```javascript
+module.exports = {
+  apps: [{
+    name: "frontend",
+    script: "npm",
+    args: "start"
+  }]
+};
+```
+Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.
+
+Now, start the application using PM2:
+```bash
+pm2 start ecosystem.config.js
 ```
 
 ### 6.5 Save PM2 Process List and Verify Status

@@ -214,7 +214,7 @@ sudo chown -R $USER:$USER /home/ubuntu/backend
 cd /home/ubuntu/backend
 
 # Clone your project repository
-git clone git@github.com:username/backend-repo.git project_repo_name
+git clone git@github.com:username/backend-repo.git
 ```
 
 ### 6.2 Pull the Code on Server
@@ -284,12 +284,27 @@ sudo npm install pm2 -g
 ```
 
 ### 7.2 Start Django Backend with PM2
-Start Gunicorn inside your virtual environment, binding it to port `8000` under a PM2 application named `backend`:
+Create an `ecosystem.config.js` file in your backend project directory:
 ```bash
-# Run gunicorn through PM2
-pm2 start "venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 myproject.wsgi:application" --name "backend"
+nano ecosystem.config.js
 ```
-*(Note: Replace `myproject.wsgi:application` with the directory name containing your `wsgi.py` file).*
+
+Paste the configuration below (replace `myproject.wsgi:application` with the directory name containing your `wsgi.py` file):
+```javascript
+module.exports = {
+  apps: [{
+    name: "backend",
+    script: "venv/bin/gunicorn",
+    args: "--workers 3 --bind 127.0.0.1:8000 myproject.wsgi:application"
+  }]
+};
+```
+Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.
+
+Now, start your backend application using PM2:
+```bash
+pm2 start ecosystem.config.js
+```
 
 ### 7.3 Save PM2 Process List and Verify Status
 To ensure that PM2 restarts your backend automatically when the Ubuntu server restarts:
