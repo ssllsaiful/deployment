@@ -93,22 +93,11 @@ We will create a directory for the application, clone the repository, and pull t
 ### 4.1 Create App Directory
 ```bash
 # Create directory under /var/www (best practice) or home folder
-sudo mkdir -p /var/www/nextjs-app
-sudo chown -R $USER:$USER /var/www/nextjs-app
-cd /var/www/nextjs-app
+sudo mkdir -p /home/ubuntu/frontend
+sudo chown -R $USER:$USER /home/ubuntu/frontend
+cd /home/ubuntu/frontend
 ```
-
-### 4.2 Initialize Git and Clone/Pull Code
-If it is a private repository, you need to generate an SSH key on the server and add it to your GitHub/GitLab repository settings:
-```bash
-# Generate SSH key (press Enter to accept defaults)
-ssh-keygen -t ed25519 -C "server-deploy@example.com"
-
-# View the public key to copy it
-cat ~/.ssh/id_ed25519.pub
-```
-*Add this public key to GitHub Deploy Keys on your repository settings.*
-
+![alt text](image.png)
 <!-- SCREENSHOT_PLACEHOLDER: GitHub Deploy Keys interface or terminal displaying SSH public key -->
 <!-- Please paste your screenshot of adding SSH deploy key to GitHub below: -->
 <!-- <img src="./screenshots/github_deploy_key.png" alt="GitHub Deploy Keys" width="700"/> -->
