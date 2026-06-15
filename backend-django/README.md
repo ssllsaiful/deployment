@@ -143,30 +143,108 @@ sudo systemctl restart postgresql
 
 ---
 
-## 5. Git Repository Setup
+### 5. Local Project Configuration & Push to Git
 
-### 5.1 System dependencies
-Install Python development headers, pip, venv, and PostgreSQL client library compilation requirements:
-```bash
-sudo apt install python3-pip python3-venv python3-dev libpq-dev git curl -y
+Before configuring the server, return to your **local PC** (where your project code is located) to install production packages, update settings, and push the updated codebase to Git.
+
+### 5.1 Update Database Credentials Locally
+Open your project's configuration (or `.env` file) on your local machine and update it with the credentials of the database you just created on the server:
+```env
+DB_NAME=my_django_db
+DB_USER=django_db_user
+DB_PASSWORD=SuperSecurePassword123
+DB_HOST=your_server_ip_address
+DB_PORT=5432
 ```
 
-### 5.2 Clone the Repository
+### 5.2 Install Production Dependencies
+Run the following commands in your local project terminal to install Gunicorn (the WSGI server) and WhiteNoise (for serving static styling/admin CSS files in production):
 ```bash
-sudo mkdir -p /var/www/django-backend
-sudo chown -R $USER:$USER /var/www/django-backend
-cd /var/www/django-backend
+pip install gunicorn whitenoise
+```
 
-# Generate deployment keys if needed, copy to GitHub, and clone repo
-git clone git@github.com:username/backend-repo.git .
+### 5.3 Modify `settings.py` for Production
+Open your Django `settings.py` and modify the following configuration values:
+
+```python
+# settings.py
+
+# 1. Disable debug mode
+DEBUG = False
+
+# 2. Add your server domain name and IP address
+ALLOWED_HOSTS = ['api.example.com', 'your_server_ip_address', 'localhost', '127.0.0.1']
+
+# 3. Add WhiteNoise middleware right after SecurityMiddleware
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise Middleware
+    # ... other middlewares ...
+]
+
+# 4. Configure WhiteNoise static file storage settings
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+```
+
+### 5.4 Export Requirements and Push Code
+Export the updated list of dependencies to `requirements.txt`, commit, and push the updates to your Git repository (GitHub/GitLab):
+```bash
+# Export packages
+pip freeze > requirements.txt
+
+# Commit and Push to Git
+git add .
+git commit -m "Configure production database, allowed hosts, and whitenoise"
+git push origin main
 ```
 
 ---
 
-## 6. Configure Python Virtual Environment & Install Dependencies
+## 6. Server Repository Setup, Pull, & Dependencies
 
-Create and activate virtual environment to isolate backend dependencies:
+Now, return to your server terminal session.
 
+### 6.1 Create Directory & Clone Project (First-time setup)
+If you haven't cloned the project on the server yet:
+```bash
+sudo mkdir -p /home/ubuntu/backend
+sudo chown -R $USER:$USER /home/ubuntu/backend
+cd /home/ubuntu/backend
+
+# Clone your project repository
+git clone git@github.com:username/backend-repo.git project_repo_name
+```
+
+### 6.2 Pull the Code on Server
+Navigate into the repository directory and pull your latest changes:
+```bash
+cd /home/ubuntu/backend/project_repo_name
+git pull
+```
+
+### 6.3 Create Environment File (`.env`)
+Create a `.env` file in the folder to securely pass configuration to Django:
+```bash
+nano .env
+```
+Paste your production settings:
+```env
+DEBUG=False
+SECRET_KEY=your_django_production_secret_key
+ALLOWED_HOSTS=api.example.com,your_server_ip_address,localhost,127.0.0.1
+
+DB_NAME=my_django_db
+DB_USER=django_db_user
+DB_PASSWORD=SuperSecurePassword123
+DB_HOST=127.0.0.1
+DB_PORT=5432
+```
+Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.
+
+### 6.4 Configure Virtual Environment & Install Requirements
+Create a clean environment, activate it, and install python dependencies:
 ```bash
 # Create venv
 python3 -m venv venv
@@ -174,182 +252,106 @@ python3 -m venv venv
 # Activate venv
 source venv/bin/activate
 
-# Install dependencies (make sure psycopg2 or psycopg2-binary and gunicorn are in requirements)
+# Install dependencies (make sure psycopg2 or psycopg2-binary, whitenoise, and gunicorn are installed)
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-<!-- SCREENSHOT_PLACEHOLDER: Terminal showing successful pip install -r requirements.txt output -->
-<!-- Please paste your screenshot of package installations below: -->
-<!-- <img src="./screenshots/pip_install.png" alt="Pip Install Dependencies" width="700"/> -->
-
----
-
-## 7. Configure Django Settings (`settings.py`)
-
-Make edits inside your Django project's `settings.py` file to prepare it for production.
-
+### 6.5 Run Migrations and Collect Static Files
+Compile your static admin styling sheets and migrate the Postgres database:
 ```bash
-nano path/to/your/project/settings.py
-```
-
-### 7.1 Security Settings
-Ensure `DEBUG` is set to `False` and configure `ALLOWED_HOSTS` with your server domain or IP:
-```python
-# settings.py
-
-# CRITICAL: Turn off Debug in production
-DEBUG = False
-
-# Add your domain name and server IP address
-ALLOWED_HOSTS = ['api.example.com', 'your_backend_server_ip', 'localhost', '127.0.0.1']
-```
-
-### 7.2 Database Configuration
-Change `DATABASES` settings to use PostgreSQL instead of default SQLite:
-```python
-# settings.py
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'my_django_db',
-        'USER': 'django_db_user',
-        'PASSWORD': 'SuperSecurePassword123',
-        'HOST': 'localhost',  # Or 'your_database_server_ip' if database is hosted on a separate server
-        'PORT': '5432',
-    }
-}
-```
-
-### 7.3 Static and Media Files Path Configuration
-Ensure paths are configured so Nginx can locate and serve static assets directly:
-```python
-# settings.py
-import os
-
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-```
-
----
-
-## 8. Run Django Migrations and Collect Static Files
-
-Before starting the server, initialize the database schema and gather all static CSS/JS/images.
-
-```bash
-# Make sure virtual environment is active
-source venv/bin/activate
-
-# 8.1 Apply database migrations
+# Apply migrations to PostgreSQL
 python manage.py migrate
 
-# 8.2 Create superuser (interactive command)
-python manage.py createsuperuser
-
-# 8.3 Collect static files
+# Gather static CSS/JS files (including django admin styles)
 python manage.py collectstatic --no-input
 ```
 
-<!-- SCREENSHOT_PLACEHOLDER: Database migrations running successfully and collectstatic completion in terminal -->
-<!-- Please paste your screenshot of migrations and collectstatic output below: -->
-<!-- <img src="./screenshots/django_migrations.png" alt="Django Migrations and Static Files" width="700"/> -->
+---
+
+## 7. Install and Configure PM2 for Backend
+
+Just like the frontend, we will use **PM2** as the process manager to run the Gunicorn backend server in the background and keep it alive.
+
+### 7.1 Verify or Install PM2 Globally
+Check if PM2 is installed on the server. If not installed, install it:
+```bash
+# Check if pm2 exists
+pm2 -v
+
+# If not installed, install it:
+sudo npm install pm2 -g
+```
+
+### 7.2 Start Django Backend with PM2
+Start Gunicorn inside your virtual environment, binding it to port `8000` under a PM2 application named `backend`:
+```bash
+# Run gunicorn through PM2
+pm2 start "venv/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 myproject.wsgi:application" --name "backend"
+```
+*(Note: Replace `myproject.wsgi:application` with the directory name containing your `wsgi.py` file).*
+
+### 7.3 Save PM2 Process List and Verify Status
+To ensure that PM2 restarts your backend automatically when the Ubuntu server restarts:
+```bash
+# Generate startup configuration
+pm2 startup systemd
+# (Note: Copy and run the command printed by the command output starting with 'sudo env PATH=...')
+
+# Save the current list of running PM2 applications
+pm2 save
+
+# Verify application status
+pm2 status
+```
+*Make sure the status column of the process `backend` shows `online`.*
+
+<!-- SCREENSHOT_PLACEHOLDER: PM2 status list showing both "frontend" and "backend" processes are online -->
+<!-- Please paste your screenshot showing pm2 status and list below: -->
+<!-- <img src="./screenshots/pm2_backend_status.png" alt="PM2 Backend Status" width="700"/> -->
 
 ---
 
-## 9. Configure Gunicorn Daemon (Systemd Service)
+## 8. Domain Setup & Reverse Proxy (CloudPanel vs Manual Nginx)
 
-Gunicorn runs the WSGI server application. We will manage Gunicorn using Ubuntu systemd services so it starts automatically at boot.
+Next, we must configure how web traffic from the internet reaches the Gunicorn backend running on port `8000`.
 
-### 9.1 Create Gunicorn Socket
-Create a systemd socket file to listen for connections:
-```bash
-sudo nano /etc/systemd/system/gunicorn.socket
-```
-Paste this configuration:
-```ini
-[Unit]
-Description=gunicorn socket
+### Option A: Server has CloudPanel Installed
+If you are using **CloudPanel** to manage your server:
+1. Log in to your CloudPanel admin dashboard.
+2. Click **Add Site** -> Select **Reverse Proxy**.
+3. Fill out the following:
+   * **Domain Name**: `api.example.com`
+   * **Reverse Proxy Port**: `8000`
+4. Click **Create** or **Save**.
+5. Navigate to the site settings in CloudPanel, go to the **SSL/TLS** tab, and generate a free Let's Encrypt certificate.
+*If using CloudPanel, you can skip Option B (Manual Nginx Setup) and Certbot manual setup entirely.*
 
-[Socket]
-ListenStream=/run/gunicorn.sock
-
-[Install]
-WantedBy=sockets.target
-```
-
-### 9.2 Create Gunicorn Service
-Create the service configuration file:
-```bash
-sudo nano /etc/systemd/system/gunicorn.service
-```
-Paste this configuration (adjust paths and usernames to match your setup):
-```ini
-[Unit]
-Description=gunicorn daemon
-Requires=gunicorn.socket
-After=network.target
-
-[Service]
-User=ubuntu
-Group=www-data
-WorkingDirectory=/var/www/django-backend
-ExecStart=/var/www/django-backend/venv/bin/gunicorn \
-          --access-logfile - \
-          --workers 3 \
-          --bind unix:/run/gunicorn.sock \
-          myproject.wsgi:application
-
-[Install]
-WantedBy=multi-user.target
-```
-> [!NOTE]
-> Replace `myproject.wsgi:application` with the directory name containing your `wsgi.py` file.
-
-### 9.3 Start and Enable Gunicorn
-```bash
-# Start socket
-sudo systemctl start gunicorn.socket
-
-# Enable socket to run at boot
-sudo systemctl enable gunicorn.socket
-
-# Reload daemon to apply changes
-sudo systemctl daemon-reload
-
-# Restart gunicorn service
-sudo systemctl restart gunicorn
-```
-
-Verify service status:
-```bash
-sudo systemctl status gunicorn.socket
-sudo systemctl status gunicorn.service
-```
-
-<!-- SCREENSHOT_PLACEHOLDER: Systemctl output showing active (running) status of Gunicorn socket and service -->
-<!-- Please paste your screenshot of systemctl status output below: -->
-<!-- <img src="./screenshots/gunicorn_status.png" alt="Gunicorn Service Status" width="700"/> -->
+<!-- SCREENSHOT_PLACEHOLDER: CloudPanel dashboard showing site creation for reverse proxy on port 8000 -->
+<!-- Please paste your screenshot of CloudPanel Reverse Proxy settings below: -->
+<!-- <img src="./screenshots/cloudpanel_backend_proxy.png" alt="CloudPanel Reverse Proxy" width="700"/> -->
 
 ---
 
-## 10. Configure Nginx Reverse Proxy
+### Option B: Manual Nginx Setup (No CloudPanel)
+If CloudPanel is not used, follow these manual configuration steps:
 
-Nginx will handle requests for static and media assets and proxy all other backend queries to the Gunicorn socket.
-
-### 10.1 Install Nginx (if not installed)
+#### 8.1 Verify or Install Nginx
+Check if Nginx is installed on the server. If not, install it:
 ```bash
-sudo apt install nginx -y
+# Check if nginx exists
+nginx -v
+
+# If not installed, install it:
+sudo apt update && sudo apt install nginx -y
 ```
 
-### 10.2 Create Nginx Server Block
+#### 8.2 Create Nginx Server Block Configuration
+Create a configuration file using your domain name as the filename:
 ```bash
-sudo nano /etc/nginx/sites-available/django-backend
+sudo nano /etc/nginx/sites-available/api.example.com
 ```
+
 Paste the configuration below (replace `api.example.com` with your actual domain):
 ```nginx
 server {
@@ -359,60 +361,74 @@ server {
     # Serve favicon, if it exists
     location = /favicon.ico { access_log off; log_not_found off; }
 
-    # Django Static Files
-    location /static/ {
-        alias /var/www/django-backend/staticfiles/;
-    }
-
-    # Django Media Uploads
+    # Django Media Uploads (if applicable)
     location /media/ {
-        alias /var/www/django-backend/media/;
+        alias /home/ubuntu/backend/project_repo_name/media/;
     }
 
-    # Proxy rest of requests to Gunicorn socket
     location / {
-        include proxy_params;
-        proxy_pass http://unix:/run/gunicorn.sock;
+        proxy_pass http://localhost:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Real IP headers
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
+Press `Ctrl + O`, `Enter` to save, and `Ctrl + X` to exit.
 
-### 10.3 Enable Configuration and Reload Nginx
+#### 8.3 Create a Soft Link to Enable the Site
+Create a symbolic link from `sites-available` to `sites-enabled`:
 ```bash
-# Link the site configuration to enable it
-sudo ln -s /etc/nginx/sites-available/django-backend /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/api.example.com /etc/nginx/sites-enabled/
+```
 
-# Test syntax correctness
+#### 8.4 Test Nginx Syntax and Restart
+Always verify the configuration syntax is correct before restarting:
+```bash
 sudo nginx -t
+```
+*Make sure it prints `syntax is ok` and `test is successful`.*
 
-# Restart Nginx
+If the test is successful, reload Nginx to apply changes:
+```bash
 sudo systemctl restart nginx
 ```
 
+<!-- SCREENSHOT_PLACEHOLDER: Terminal showing sudo nginx -t output and systemctl restart nginx command execution -->
+<!-- Please paste your screenshot of Nginx configuration test success below: -->
+<!-- <img src="./screenshots/nginx_backend_test.png" alt="Nginx Test Success" width="700"/> -->
+
 ---
 
-## 11. Enable SSL (HTTPS) with Certbot
+## 9. Manual SSL (HTTPS) Configuration with Certbot
 
-Secure the backend endpoint with Let's Encrypt SSL:
+If you configured Nginx manually (Option B), secure the domain with free Let's Encrypt SSL.
 
-### 11.1 Install Certbot Nginx plugin
+### 9.1 Install Certbot Nginx Extension
 ```bash
 sudo apt install certbot python3-certbot-nginx -y
 ```
 
-### 11.2 Request Certificate
+### 9.2 Request and Configure SSL
+Run the interactive wizard to generate the SSL certificate and let Certbot automatically update Nginx to redirect HTTP to HTTPS:
 ```bash
 sudo certbot --nginx -d api.example.com
 ```
+*Follow the terminal instructions (enter email, agree to terms, choose redirect option).*
 
-### 11.3 Verify Renewal Service
-Check automatic renewal:
+### 9.3 Verify Auto-renewal
+Let's Encrypt certificates expire in 90 days. Run a test to verify the automated renewal cronjob is working:
 ```bash
 sudo certbot renew --dry-run
 ```
 
-Your Django backend and PostgreSQL database are now deployed securely!
-
-<!-- SCREENSHOT_PLACEHOLDER: Terminal/Browser showing HTTPS response or Django Rest Framework API page running securely -->
-<!-- Please paste your screenshot of active API / admin page securely running below: -->
-<!-- <img src="./screenshots/backend_ssl_verify.png" alt="Backend Live Verification" width="700"/> -->
+<!-- SCREENSHOT_PLACEHOLDER: Web browser URL bar showing the secure padlock icon on your domain next to your site URL -->
+<!-- Please paste your screenshot of your live website running securely below: -->
+<!-- <img src="./screenshots/ssl_backend_verification.png" alt="SSL Verification" width="700"/> -->
