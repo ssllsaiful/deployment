@@ -173,7 +173,7 @@ Create an `ecosystem.config.js` file in your project directory:
 nano ecosystem.config.js
 ```
 
-Paste the configuration below:
+Paste the configuration  below (Example):
 ```javascript
 module.exports = {
   apps: [{
@@ -255,10 +255,6 @@ Paste the configuration below (replace `frontend.example.com` with your actual d
 server {
     listen 80;
     server_name frontend.example.com;
-
-    # Gzip settings for Next.js performance
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
     location / {
         proxy_pass http://localhost:3000;
