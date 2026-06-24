@@ -1,17 +1,28 @@
 # Production AI Model Deployment Guide
 
-This guide details the two primary methods to deploy your pre-trained AI model application (e.g., Streamlit + YOLO11) using a **single Docker configuration**:
-1. **Deploying on a Self-Hosted Server** (e.g., Ubuntu on AWS EC2, DigitalOcean, etc.)
-2. **Deploying on RunPod** (Cloud GPU hosting via interactive Pods or Serverless API)
+This guide covers two primary methods to deploy your pre-trained AI model application (e.g., Streamlit + YOLO11) using a **Docker configuration**:
+
+1. **Option 1 — Self-Hosted Server** (AWS EC2, DigitalOcean, etc.)
+2. **Option 2 — RunPod** (Cloud GPU hosting via interactive Pods or Serverless API)
 
 ---
 
 ## 1. Unified Configuration Files
 
-Save these files in the root of your project directory (`your-ai-project/`):
+Add these two files to the **root of your project directory**:
+
+```text
+your-ai-project/
+├── model/
+│   └── best.pt          ← Your trained model weights
+├── pothole.py           ← Streamlit app code
+├── requirements.txt     ← Python dependencies
+├── Dockerfile           ← Container build instructions
+└── docker-compose.yml   ← Container run configuration
+```
 
 ### Dockerfile
-Saved as [Dockerfile](file:///c:/Users/Saiful%20Islam/github/deployment/AI-Deployment/Dockerfile):
+
 ```dockerfile
 # Unified Dockerfile: Works for both CPU and GPU deployments
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
@@ -19,29 +30,27 @@ FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies required by OpenCV
+# Install system dependencies required by OpenCV (used by YOLO)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy python dependencies and install
+# Copy and install python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy model weights and Streamlit application code
+# Copy model weights and Streamlit app
 COPY model/ ./model/
 COPY pothole.py .
 
-# Streamlit default port is 8501
 EXPOSE 8501
 
-# Start the Streamlit application
 CMD ["streamlit", "run", "pothole.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
 ```
 
-### Docker Compose
-Saved as [docker-compose.yml](file:///c:/Users/Saiful%20Islam/github/deployment/AI-Deployment/docker-compose.yml):
+### docker-compose.yml
+
 ```yaml
 services:
   pothole-app:
@@ -54,8 +63,8 @@ services:
     restart: always
     environment:
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-    # Pass host NVIDIA GPU to the container if available on the server.
-    # Note: If your server does not have a GPU (CPU-only), delete or comment out the 'deploy' section below.
+    # GPU pass-through — delete or comment out the 'deploy' block below
+    # if your server does NOT have an NVIDIA GPU (CPU-only servers).
     deploy:
       resources:
         reservations:
@@ -67,114 +76,196 @@ services:
 
 ---
 
-## Step 1: Deploy on a Self-Hosted Server (AWS, DigitalOcean, etc.)
+## Option 1: Self-Hosted Ubuntu Server Deployment
 
-Follow these steps to deploy on your own Ubuntu server using Docker:
+### Step 1: Configure Docker on the Host
 
-### 1. Configure the Host Server
-* **If your server HAS an NVIDIA GPU:**
-  Install NVIDIA drivers and the NVIDIA Container Toolkit to bridge the GPU into Docker:
-  ```bash
-  # Install Drivers
-  sudo apt update && sudo ubuntu-drivers install && sudo reboot
-  
-  # Install Docker
-  sudo apt install -y docker.io && sudo systemctl enable --now docker
-  
-  # Install NVIDIA Container Toolkit
-  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
-    && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-      sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-      sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-  sudo apt update && sudo apt install -y nvidia-container-toolkit
-  sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
-  ```
-* **If your server is CPU-Only (No GPU):**
-  Simply install Docker:
-  ```bash
-  sudo apt update && sudo apt install -y docker.io && sudo systemctl enable --now docker
-  ```
+**If your server has an NVIDIA GPU:**
+```bash
+# Install the NVIDIA display driver
+sudo apt update && sudo ubuntu-drivers install && sudo reboot
 
-### 2. Launch the Application
-1. SSH into your server, clone your repository, and copy the `Dockerfile` and `docker-compose.yml` into your project root folder.
-2. Run the deployment command:
-   * **If GPU is present:**
-     ```bash
-     docker compose up -d --build
-     ```
-   * **If CPU-Only:**
-     Comment out the `deploy:` block (lines 13-20) in `docker-compose.yml`, then run:
-     ```bash
-     docker compose up -d --build
-     ```
-     *Note: PyTorch will automatically detect that no CUDA device is available and fall back to CPU execution.*
+# Install Docker
+sudo apt install -y docker.io && sudo systemctl enable --now docker
+
+# Install the NVIDIA Container Toolkit (bridges GPU into Docker)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt update && sudo apt install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker
+```
+
+**If your server is CPU-Only (no GPU):**
+```bash
+sudo apt update && sudo apt install -y docker.io && sudo systemctl enable --now docker
+```
+
+> **Note:** For CPU-only servers, also comment out the `deploy:` block inside `docker-compose.yml`. PyTorch will automatically fall back to CPU execution.
 
 ---
 
-## Step 2: Deploy on RunPod (Cloud GPU Hosting)
+### Step 2: Build and Launch the Application
 
-RunPod is a cloud GPU platform where you can deploy your container using two methods:
+SSH into your server, clone your repository, and run:
+
+```bash
+# Clone your repository
+git clone https://github.com/your-username/your-ai-project.git
+cd your-ai-project
+
+# Build the Docker image and start the container in the background
+docker compose up -d --build
+```
+
+Verify the container is running:
+```bash
+# View active containers
+docker ps
+
+# Tail the application logs
+docker logs -f pothole-segmentation-app
+```
+
+---
+
+### Step 3: Install Nginx and Certbot
+
+Nginx acts as a reverse proxy to route public internet traffic to your Streamlit container running on port `8501`. Certbot issues a free SSL certificate to enable HTTPS.
+
+```bash
+# Install Nginx and Certbot
+sudo apt update
+sudo apt install -y nginx certbot python3-certbot-nginx
+
+# Start Nginx and enable it to auto-start on server reboot
+sudo systemctl start nginx
+sudo systemctl enable nginx
+```
+
+---
+
+### Step 4: Create the Nginx Server Block
+
+Open a new configuration file:
+```bash
+sudo nano /etc/nginx/sites-available/pothole-segmentation
+```
+
+Paste the following configuration inside the file:
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;  # Replace with your actual domain or server IP
+
+    # Increase upload limit for large image files
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://localhost:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Save and close the file (`Ctrl+X`, then `Y`, then `Enter`).
+
+---
+
+### Step 5: Enable the Configuration and Restart Nginx
+
+```bash
+# Create a symbolic link to activate the site
+sudo ln -s /etc/nginx/sites-available/pothole-segmentation /etc/nginx/sites-enabled/
+
+# Test the Nginx configuration for syntax errors
+sudo nginx -t
+
+# Restart Nginx to apply changes
+sudo systemctl restart nginx
+```
+
+---
+
+### Step 6: Issue an SSL Certificate with Certbot
+
+Run Certbot to automatically fetch and install a free Let's Encrypt SSL certificate. This will also configure automatic HTTPS redirection.
+
+```bash
+sudo certbot --nginx -d your-domain.com
+```
+
+Certbot sets up a background cron job to automatically renew the certificate before it expires. Your application is now live at `https://your-domain.com`.
+
+---
+
+## Option 2: Deploy on RunPod (Cloud GPU Hosting)
+
+RunPod is a cloud GPU platform where you rent GPU instances by the hour, with no upfront hardware costs.
 
 ### Method A: RunPod Pods (Persistent & Interactive Workspace)
-Best for active testing and running persistent apps.
 
-1. **Create Template:** In the RunPod Console, go to **Templates** -> **New Template**. Set the base image to `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04` (or any PyTorch CUDA image). Expose HTTP port `8501`.
-2. **Deploy Pod:** Choose a GPU (e.g. RTX 4090) under **GPU Cloud**, select your Template, allocate a persistent **Network Volume**, and launch.
+Best for active testing, Streamlit dashboards, and running apps persistently.
+
+1. **Create Template:** In the RunPod Console go to **Templates → New Template**. Set the base image to `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04`. Expose HTTP port `8501`.
+2. **Deploy Pod:** Under **GPU Cloud**, select a GPU (e.g., RTX 4090), choose your Template, allocate a **Network Volume** (to persist data across restarts), and launch.
 3. **Setup and Run:**
-   - Once running, click **Connect** -> **Connect to Jupyter Lab** (or connect via SSH).
-   - In the Jupyter terminal, move to the workspace network volume, clone your repo, and install packages:
-     ```bash
-     cd /workspace
-     git clone <your-repo-link>
-     cd <your-repo-folder>
-     pip install -r requirements.txt
-     ```
-   - Start Streamlit:
-     ```bash
-     streamlit run pothole.py --server.port 8501 --server.address 0.0.0.0
-     ```
-   - Access the application in your browser by clicking **Connect** -> **HTTP Service [Port 8501]** in the RunPod Console.
+   ```bash
+   # Inside Jupyter Lab terminal or SSH session
+   cd /workspace
+   git clone <your-repo-link>
+   cd <your-repo-folder>
+   pip install -r requirements.txt
 
-### Method B: RunPod Serverless (Autoscaling Web API)
-Best for production web applications where traffic fluctuates and you want to scale down to **$0 cost** when idle.
+   # Launch the app
+   streamlit run pothole.py --server.port 8501 --server.address 0.0.0.0
+   ```
+4. **Access:** In the RunPod Console, click **Connect → HTTP Service [Port 8501]** to open your live Streamlit app URL.
 
-1. **Create a Serverless Handler (`handler.py`):**
-   Use the `runpod` python SDK to receive API calls, decode base64 images, execute your model, and return coordinates/results.
-2. **Build and Push Docker Image:**
-   Write a Dockerfile using your handler script and model weights. Build it and push it to a public registry:
+---
+
+### Method B: RunPod Serverless (Autoscaling API)
+
+Best for production APIs with variable traffic. Scales to **$0 cost** when idle.
+
+1. **Create a handler script (`handler.py`):** Use the `runpod` Python SDK to accept API calls, decode base64 images, run your YOLO model, and return results as JSON.
+2. **Build and push your Docker image:**
    ```bash
    docker build -t yourusername/yolo11-pothole:latest .
    docker push yourusername/yolo11-pothole:latest
    ```
-3. **Deploy Endpoint:** In the RunPod Console, go to **Serverless** -> **Endpoints** -> **New Endpoint**. Enter your Docker image tag, set **Min Workers to 0** (so it shuts down when not in use), and set your desired GPU type.
-4. **Interact:** RunPod generates a unique API URL. Send post requests containing your image payloads to get model predictions back.
+3. **Configure Endpoint:** In the RunPod Console go to **Serverless → Endpoints → New Endpoint**. Enter your Docker image tag and set **Min Workers to 0** (saves cost when idle).
+4. **Invoke:** RunPod provides a unique HTTPS endpoint URL. Send POST requests with your image payload to get predictions back.
 
 ---
 
 ## 3. CI/CD Pipeline for AI Deployment
 
-Continuous Integration and Continuous Deployment (CI/CD) for AI differs from standard web apps because it must handle **Code, Data, and Model Weights** collectively.
+CI/CD for AI differs from regular web apps because it must handle **code, dependencies, and model weights** together.
 
 ```mermaid
 graph LR
-    A[Push Code/Model] --> B[GitHub Actions CI]
-    B --> C[Verify Model Load & Accuracy]
+    A[Push Code to GitHub] --> B[GitHub Actions CI]
+    B --> C[Run Model Tests]
     C -->|Pass| D[Build Docker Image]
     D --> E[Push to Docker Hub]
     E --> F[CD Release]
-    F -->|Target 1| G[SSH Pull on Host Server]
+    F -->|Target 1| G[SSH Deploy to Ubuntu Server]
     F -->|Target 2| H[Update RunPod Endpoint]
 ```
 
-### Key Concept: Where do Model Weights live?
-* **Avoid pushing weights (`.pt` files) to GitHub:** Large files (50MB - 10GB+) slow down Git repositories.
-* **Best Practice:** Store model weights in a cloud bucket (AWS S3, Google Cloud Storage) or a model registry (MLflow, DVC).
-* **Pipeline Action:** During the Docker build step in CI, the runner downloads the weights from your cloud storage and bakes them directly into the container image.
+> **Key Rule on Model Weights:** Never commit large `.pt` weight files to GitHub. Store them in a cloud bucket (AWS S3, Google Cloud Storage) or a model registry (MLflow, DVC). During CI, the build runner downloads them and bakes them into the Docker image.
 
----
-
-### Production CI/CD Workflow (GitHub Actions)
-Create this file in your repository as `.github/workflows/deploy.yml` to automate testing, building, and deploying:
+### GitHub Actions Workflow (`.github/workflows/deploy.yml`)
 
 ```yaml
 name: AI Model Deployment CI/CD
@@ -197,17 +288,17 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           pip install -r requirements.txt
           pip install pytest
 
-      - name: Test Model Load & Inference Integrity
+      - name: Run Model Tests
         run: |
-          # Runs python unit tests to verify the model loads and predicts without runtime errors
+          # Verifies the model loads and produces predictions without errors
           pytest tests/test_model.py
 
-  # Job 2: Build & Package Container
+  # Job 2: Build and Push Docker Image
   build-and-push-docker:
     needs: test-model
     runs-on: ubuntu-latest
@@ -221,14 +312,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
+      - name: Build and Push Image
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/pothole-segmentation-app:latest
 
-  # Job 3: Deploy to Ubuntu Host Server
+  # Job 3: Deploy to Ubuntu Server via SSH
   deploy-to-server:
     needs: build-and-push-docker
     runs-on: ubuntu-latest
@@ -241,11 +332,8 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             cd /home/ubuntu/your-ai-project
-            # Pull latest code and updated compose configs
             git pull origin main
-            # Pull the newly compiled docker image
             docker compose pull
-            # Restart container stack with zero downtime
             docker compose up -d --build
 ```
 
@@ -253,11 +341,10 @@ jobs:
 
 ## 4. Deployment Decision Matrix
 
-| Metric | Option A: GPU-Enabled Server (Docker) | Option B: CPU-Only Server (Docker) |
-| :--- | :--- | :--- |
-| **Inference Latency** | **Ultra-Fast** (~10ms - 30ms per query) | **Medium** (~100ms - 300ms per query) |
-| **Ideal For** | High traffic, live video streams | Low-medium traffic, image uploads |
-| **Monthly Cost** | Higher ($40 - $100+/mo minimum) | Lower ($5 - $20/mo minimum) |
-| **Setup Complexity** | Medium (requires Nvidia drivers & toolkit) | **Low** (requires only standard Docker) |
-| **PyTorch Size** | ~2.0 GB (includes CUDA wheels) | **~150 MB** (compact, CPU-only wheels) |
-
+| Metric | Self-Hosted Server (GPU) | Self-Hosted Server (CPU) | RunPod Pods | RunPod Serverless |
+| :--- | :--- | :--- | :--- | :--- |
+| **Inference Speed** | Ultra-Fast (~10–30ms) | Medium (~100–300ms) | Ultra-Fast (~10–30ms) | Ultra-Fast (~10–30ms) |
+| **Monthly Cost** | Fixed ($40–$100+/mo) | Fixed ($5–$20/mo) | Hourly billing | Pay-per-second |
+| **Idle Cost** | Always billed | Always billed | Always billed | **$0.00 when idle** |
+| **Autoscaling** | Manual | Manual | Manual resize | **Automatic (0 → N)** |
+| **Best For** | Constant production traffic | Low-traffic or budget | Development & dashboards | Variable/spike API traffic |
