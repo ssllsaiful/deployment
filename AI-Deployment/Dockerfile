@@ -1,14 +1,10 @@
-# Use PyTorch with CUDA runtime base image
+# Unified Dockerfile: Works for both CPU and GPU deployments
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
 WORKDIR /app
-
-# Prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies required by OpenCV (used by Ultralytics/YOLO)
+# Install system dependencies required by OpenCV (used under the hood by YOLO)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -18,12 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy model weights and application code
+# Copy model weights and Streamlit application code
 COPY model/ ./model/
 COPY pothole.py .
 
-# Expose the default Streamlit port
+# Streamlit default port is 8501
 EXPOSE 8501
 
-# Run the Streamlit application
+# Start the Streamlit application
 CMD ["streamlit", "run", "pothole.py", "--server.port", "8501", "--server.address", "0.0.0.0"]

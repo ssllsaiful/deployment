@@ -9,7 +9,8 @@ services:
     restart: always
     environment:
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-    # Pass the host GPU to the container
+    # Pass host NVIDIA GPU to the container if available on the server.
+    # Note: If your server does not have a GPU (CPU-only), delete or comment out the 'deploy' section below.
     deploy:
       resources:
         reservations:
